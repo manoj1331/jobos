@@ -6,111 +6,82 @@ import { fetchJobicy } from "./jobicy"
 import { fetchWeWorkRemotely } from "./weworkremotely"
 import { fetchYCJobs } from "./ycjobs"
 import { fetchJSearch } from "./jsearch"
+import { fetchCutshort, fetchWellfound, fetchInstahyre } from "./india"
 import { NormalizedJob } from "./constants"
 
 export async function fetchAllJobs(): Promise<{ inserted: number; updated: number; total: number }> {
-  console.log("[JobFetcher] Starting fetch from all sources...")
+  console.log("[JobFetcher] Starting fetch — South India + Remote, 4 strict roles only")
 
   const fetchResults = await Promise.allSettled([
-    fetchRemoteOK(),
-    fetchRemotive(),
-    fetchArbeitnow(),
-    fetchJobicy(),
-    fetchWeWorkRemotely(),
-    fetchYCJobs(),
-    fetchJSearch(),
+    fetchRemoteOK(),      // Remote worldwide — accessible from South India
+    fetchRemotive(),      // Remote worldwide
+    fetchArbeitnow(),     // Remote worldwide (filtered to remote only)
+    fetchJobicy(),        // Remote worldwide
+    fetchWeWorkRemotely(), // Remote worldwide
+    fetchYCJobs(),        // YC startup jobs
+    fetchJSearch(),       // India-specific: Bangalore, Hyderabad, Chennai (needs RAPIDAPI_KEY)
+    fetchCutshort(),      // India startup jobs
+    fetchWellfound(),     // India startup jobs
+    fetchInstahyre(),     // Bangalore, Hyderabad, Chennai
   ])
 
-  const allJobs: NormalizedJob[] = []
-  const sourceNames = ["RemoteOK", "Remotive", "Arbeitnow", "Jobicy", "WeWorkRemotely", "YCJobs", "JSearch"]
+  const names = ["RemoteOK","Remotive","Arbeitnow","Jobicy","WeWorkRemotely","YCJobs","JSearch","Cutshort","Wellfound","Instahyre"]
 
-  fetchResults.forEach((result, i) => {
-    if (result.status === "fulfilled") {
-      console.log(`[JobFetcher] ${sourceNames[i]}: ${result.value.length} jobs`)
-      allJobs.push(...result.value)
+  const allJobs: NormalizedJob[] = []
+  fetchResults.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      console.log(`[JobFetcher] ${names[i]}: ${r.value.length} matching jobs`)
+      allJobs.push(...r.value)
     } else {
-      console.error(`[JobFetcher] ${sourceNames[i]} failed:`, result.reason)
+      console.error(`[JobFetcher] ${names[i]} failed:`, r.reason)
     }
   })
 
-  // Deduplicate by externalId+source
+  // Deduplicate
   const unique = new Map<string, NormalizedJob>()
-  for (const job of allJobs) {
-    unique.set(`${job.source}:${job.externalId}`, job)
-  }
-
+  for (const job of allJobs) unique.set(`${job.source}:${job.externalId}`, job)
   const jobs = [...unique.values()]
-  console.log(`[JobFetcher] Total unique jobs: ${jobs.length}`)
+  console.log(`[JobFetcher] Total unique: ${jobs.length}`)
 
-  let inserted = 0
-  let updated = 0
+  let inserted = 0, updated = 0
 
-  // Upsert in batches
-  const batchSize = 50
-  for (let i = 0; i < jobs.length; i += batchSize) {
-    const batch = jobs.slice(i, i + batchSize)
-
-    await Promise.allSettled(
-      batch.map(async job => {
-        try {
-          const existing = await prisma.discoveredJob.findUnique({
-            where: { externalId_source: { externalId: job.externalId, source: job.source } },
+  for (let i = 0; i < jobs.length; i += 50) {
+    await Promise.allSettled(jobs.slice(i, i + 50).map(async job => {
+      try {
+        const existing = await prisma.discoveredJob.findUnique({
+          where: { externalId_source: { externalId: job.externalId, source: job.source } },
+        })
+        if (existing) {
+          await prisma.discoveredJob.update({
+            where: { id: existing.id },
+            data: { title: job.title, isActive: true, updatedAt: new Date() },
           })
-
-          if (existing) {
-            await prisma.discoveredJob.update({
-              where: { id: existing.id },
-              data: {
-                title: job.title,
-                isActive: true,
-                updatedAt: new Date(),
-                description: job.description ?? existing.description,
-                skills: job.skills.length > 0 ? job.skills : existing.skills,
-              },
-            })
-            updated++
-          } else {
-            await prisma.discoveredJob.create({
-              data: {
-                externalId: job.externalId,
-                source: job.source,
-                title: job.title,
-                company: job.company,
-                companyLogo: job.companyLogo,
-                companyWebsite: job.companyWebsite,
-                location: job.location,
-                isRemote: job.isRemote,
-                isHybrid: job.isHybrid,
-                salaryMin: job.salaryMin,
-                salaryMax: job.salaryMax,
-                salaryCurrency: job.salaryCurrency,
-                description: job.description,
-                skills: job.skills,
-                applyUrl: job.applyUrl,
-                jobType: job.jobType,
-                postedAt: job.postedAt,
-                companyType: job.companyType,
-                isActive: true,
-              },
-            })
-            inserted++
-          }
-        } catch (e) {
-          // Skip duplicate key errors silently
+          updated++
+        } else {
+          await prisma.discoveredJob.create({
+            data: {
+              externalId: job.externalId, source: job.source,
+              title: job.title, company: job.company,
+              companyLogo: job.companyLogo, companyWebsite: job.companyWebsite,
+              location: job.location, isRemote: job.isRemote, isHybrid: job.isHybrid,
+              salaryMin: job.salaryMin, salaryMax: job.salaryMax, salaryCurrency: job.salaryCurrency,
+              description: job.description, skills: job.skills,
+              applyUrl: job.applyUrl, jobType: job.jobType,
+              postedAt: job.postedAt, companyType: job.companyType, isActive: true,
+            },
+          })
+          inserted++
         }
-      })
-    )
+      } catch {}
+    }))
   }
 
-  // Mark old jobs inactive (not seen in last 30 days)
+  // Archive jobs older than 30 days
   await prisma.discoveredJob.updateMany({
-    where: {
-      updatedAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-      isActive: true,
-    },
+    where: { updatedAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, isActive: true },
     data: { isActive: false },
   })
 
-  console.log(`[JobFetcher] Done. Inserted: ${inserted}, Updated: ${updated}`)
+  console.log(`[JobFetcher] Done — inserted: ${inserted}, updated: ${updated}`)
   return { inserted, updated, total: jobs.length }
 }

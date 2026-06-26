@@ -105,3 +105,43 @@ export function isLevelCompatible(title: string): boolean {
   // "Senior X" is on the border — include it (3.6 yrs can apply to senior roles too)
   return true
 }
+
+// ── South India location filter ───────────────────────────────────────────────
+export const SOUTH_INDIA_CITIES = [
+  // Karnataka
+  "bangalore", "bengaluru", "mysore", "mysuru", "mangalore", "mangaluru",
+  "hubli", "dharwad", "belgaum", "belagavi", "shimoga",
+  // Telangana
+  "hyderabad", "secunderabad", "warangal", "nizamabad",
+  // Tamil Nadu
+  "chennai", "madras", "coimbatore", "madurai", "trichy", "tiruchirappalli",
+  "salem", "tirunelveli", "vellore", "erode", "tiruppur",
+  // Andhra Pradesh
+  "visakhapatnam", "vizag", "vijayawada", "guntur", "tirupati",
+  "nellore", "kurnool", "kakinada", "rajahmundry",
+  // Kerala
+  "kochi", "cochin", "thiruvananthapuram", "trivandrum", "kozhikode",
+  "calicut", "thrissur", "kollam", "kannur",
+  // General India
+  "india", "south india", "remote, india", "india (remote)",
+  "pan india", "work from home india", "wfh india",
+]
+
+export function isLocationCompatible(location?: string): boolean {
+  if (!location) return false
+  const loc = location.toLowerCase().trim()
+
+  // Always include remote jobs — accessible from anywhere in South India
+  if (
+    loc === "remote" ||
+    loc === "worldwide" ||
+    loc === "anywhere" ||
+    loc === "global" ||
+    loc.includes("remote") ||
+    loc.includes("work from home") ||
+    loc.includes("wfh")
+  ) return true
+
+  // Check for South India cities/states
+  return SOUTH_INDIA_CITIES.some(city => loc.includes(city))
+}

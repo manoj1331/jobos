@@ -324,7 +324,7 @@ export default function DiscoverPage() {
             Discover Jobs
           </h1>
           <p className="text-gray-400 text-sm mt-0.5">
-            {stats?.total ?? 0} live jobs · DevOps, Cloud, SRE, Platform, K8s roles at startups & product companies
+            {stats?.total ?? 0} live jobs · DevOps, Cloud, Platform & Cloud Support roles · South India (Bangalore, Hyderabad, Chennai) + Remote
           </p>
         </div>
         <Button onClick={triggerFetch} loading={fetching} variant="secondary" className="gap-2">

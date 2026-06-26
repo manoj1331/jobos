@@ -1,14 +1,10 @@
 import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible } from "./constants"
 
-const FEEDS = [
-  "https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss",
-  "https://weworkremotely.com/remote-jobs.rss",
-]
+const FEEDS = ["https://weworkremotely.com/categories/remote-devops-sysadmin-jobs.rss"]
 
 function parseRSS(xml: string): NormalizedJob[] {
   const results: NormalizedJob[] = []
-  const items = xml.split("<item>").slice(1)
-  for (const item of items) {
+  for (const item of xml.split("<item>").slice(1)) {
     const get = (tag: string) => {
       const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([^<]*)<\\/${tag}>`))
       return m ? (m[1] || m[2] || "").trim() : ""
@@ -22,20 +18,15 @@ function parseRSS(xml: string): NormalizedJob[] {
     if (!title || !link) continue
     if (isExcludedCompany(company)) continue
     if (!isStrictlyRelevant(title)) continue
-        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), title)) continue
     if (!isExperienceCompatible(desc, title)) continue
+    // WWR = worldwide remote → compatible with South India
     results.push({
       externalId: `wwr_${Buffer.from(guid || link).toString("base64").slice(0, 20)}`,
       source: "weworkremotely",
-      title,
-      company: company || "Unknown",
-      location: "Remote",
-      isRemote: true,
-      isHybrid: false,
+      title, company: company || "Unknown",
+      location: "Remote", isRemote: true, isHybrid: false,
       description: desc.replace(/<[^>]+>/g, "").trim(),
-      skills: [],
-      applyUrl: link,
-      jobType: "full-time",
+      skills: [], applyUrl: link, jobType: "full-time",
       postedAt: pubDate ? new Date(pubDate) : undefined,
     })
   }
@@ -49,9 +40,7 @@ export async function fetchWeWorkRemotely(): Promise<NormalizedJob[]> {
       const res = await fetch(url, { headers: { "User-Agent": "JobOS/1.0" }, signal: AbortSignal.timeout(10000) })
       if (!res.ok) continue
       results.push(...parseRSS(await res.text()))
-    } catch (e) {
-      console.error("[WWR] error:", (e as Error).message)
-    }
+    } catch (e) { console.error("[WWR]:", (e as Error).message) }
   }
   return results
 }

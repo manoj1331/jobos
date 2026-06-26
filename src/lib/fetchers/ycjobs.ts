@@ -22,7 +22,6 @@ export async function fetchYCJobs(): Promise<NormalizedJob[]> {
         if (!hit.title || !hit.company?.name) continue
         if (isExcludedCompany(hit.company.name)) continue
         if (!isStrictlyRelevant(hit.title)) continue
-        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), hit.title)) continue
         if (!isExperienceCompatible(hit.description, hit.title)) continue
         results.push({
           externalId: `yc_${hit.objectID}`,

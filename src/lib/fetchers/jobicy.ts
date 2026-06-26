@@ -21,7 +21,6 @@ export async function fetchJobicy(): Promise<NormalizedJob[]> {
         if (seen.has(id)) continue
         if (isExcludedCompany(job.companyName)) continue
         if (!isStrictlyRelevant(job.jobTitle)) continue
-        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), job.jobTitle)) continue
         if (!isExperienceCompatible(job.jobDescription, job.jobTitle)) continue
 
         seen.add(id)

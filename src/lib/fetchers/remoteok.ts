@@ -1,6 +1,6 @@
-import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible } from "./constants"
+import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible, isLocationCompatible } from "./constants"
 
-const TAGS = ["devops","cloud","platform-engineer","cloud-engineer","infrastructure","kubernetes","sre","devsecops","terraform","aws","gcp","azure"]
+const TAGS = ["devops","cloud","platform-engineer","cloud-engineer","infrastructure","kubernetes","terraform","aws","gcp","azure","india"]
 
 export async function fetchRemoteOK(): Promise<NormalizedJob[]> {
   const results: NormalizedJob[] = []
@@ -14,17 +14,14 @@ export async function fetchRemoteOK(): Promise<NormalizedJob[]> {
       })
       if (!res.ok) continue
       const data = await res.json()
-      const jobs = Array.isArray(data) ? data.slice(1) : []
-
-      for (const job of jobs) {
+      for (const job of (Array.isArray(data) ? data.slice(1) : [])) {
         if (!job.position || !job.company) continue
         const id = job.id?.toString()
         if (seen.has(id)) continue
         if (isExcludedCompany(job.company)) continue
         if (!isStrictlyRelevant(job.position)) continue
-        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), job.position)) continue
         if (!isExperienceCompatible(job.description, job.position)) continue
-
+        // RemoteOK jobs are all remote — allow them
         seen.add(id)
         results.push({
           externalId: `rok_${id}`,
@@ -44,7 +41,7 @@ export async function fetchRemoteOK(): Promise<NormalizedJob[]> {
         })
       }
     } catch (e) {
-      console.error(`[RemoteOK] tag=${tag} error:`, (e as Error).message)
+      console.error(`[RemoteOK] tag=${tag}:`, (e as Error).message)
     }
   }
   return results
