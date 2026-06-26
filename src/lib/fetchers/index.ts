@@ -1,34 +1,24 @@
 import { prisma } from "@/lib/prisma"
+import { fetchLinkedIn } from "./linkedin"
 import { fetchNaukri } from "./naukri"
 import { fetchJSearch } from "./jsearch"
-import { fetchWellfound } from "./wellfound"
 import { fetchRemoteOK } from "./remoteok"
-import { fetchRemotive } from "./remotive"
 import { NormalizedJob } from "./constants"
 
 export async function fetchAllJobs(): Promise<{ inserted: number; updated: number; total: number; sources: Record<string, number> }> {
-  console.log("[JobFetcher] Starting — India jobs, 4 roles, 3-4 yrs exp")
+  console.log("[JobFetcher] Starting — India DevOps/Cloud/Platform/CloudSupport jobs")
 
-  const [naukri, jsearch, wellfound, remoteok, remotive] = await Promise.allSettled([
-    fetchNaukri(),      // Naukri India — primary India source
-    fetchJSearch(),     // LinkedIn + Indeed + Glassdoor + Google Jobs (needs RAPIDAPI_KEY)
-    fetchWellfound(),   // Startup jobs India
-    fetchRemoteOK(),    // Remote worldwide — India-accessible
-    fetchRemotive(),    // Remote worldwide — India-accessible
+  const [linkedin, naukri, jsearch, remoteok] = await Promise.allSettled([
+    fetchLinkedIn(),   // LinkedIn public guest API — India jobs, no key needed
+    fetchNaukri(),     // Naukri RSS feeds — India jobs, no key needed
+    fetchJSearch(),    // LinkedIn/Indeed/Glassdoor/Google via RapidAPI (needs subscription)
+    fetchRemoteOK(),   // Remote jobs globally — accessible from India
   ])
 
   const all: NormalizedJob[] = []
   const sourceCounts: Record<string, number> = {}
 
-  const settled = [
-    { name: "naukri", r: naukri },
-    { name: "jsearch", r: jsearch },
-    { name: "wellfound", r: wellfound },
-    { name: "remoteok", r: remoteok },
-    { name: "remotive", r: remotive },
-  ]
-
-  for (const { name, r } of settled) {
+  for (const [name, r] of [["linkedin", linkedin], ["naukri", naukri], ["jsearch", jsearch], ["remoteok", remoteok]] as const) {
     if (r.status === "fulfilled") {
       sourceCounts[name] = r.value.length
       all.push(...r.value)
@@ -42,8 +32,7 @@ export async function fetchAllJobs(): Promise<{ inserted: number; updated: numbe
   const seen = new Map<string, NormalizedJob>()
   for (const job of all) seen.set(`${job.source}:${job.externalId}`, job)
   const jobs = [...seen.values()]
-
-  console.log(`[JobFetcher] Unique jobs after dedup: ${jobs.length}`)
+  console.log(`[JobFetcher] Unique jobs: ${jobs.length}`)
 
   let inserted = 0, updated = 0
 
@@ -62,25 +51,16 @@ export async function fetchAllJobs(): Promise<{ inserted: number; updated: numbe
         } else {
           await prisma.discoveredJob.create({
             data: {
-              externalId: job.externalId,
-              source: job.source,
-              title: job.title,
-              company: job.company,
-              companyLogo: job.companyLogo,
-              location: job.location,
-              isRemote: job.isRemote,
-              isHybrid: job.isHybrid,
-              description: job.description,
-              skills: job.skills,
-              applyUrl: job.applyUrl,
-              jobType: job.jobType,
-              postedAt: job.postedAt,
-              isActive: true,
-              salaryMin: job.salaryMin,
-              salaryMax: job.salaryMax,
+              externalId: job.externalId, source: job.source,
+              title: job.title, company: job.company,
+              companyLogo: job.companyLogo, location: job.location,
+              isRemote: job.isRemote, isHybrid: job.isHybrid,
+              description: job.description, skills: job.skills,
+              applyUrl: job.applyUrl, jobType: job.jobType,
+              postedAt: job.postedAt, isActive: true,
+              salaryMin: job.salaryMin, salaryMax: job.salaryMax,
               salaryCurrency: job.salaryCurrency,
-              experienceMin: job.experienceMin,
-              experienceMax: job.experienceMax,
+              experienceMin: job.experienceMin, experienceMax: job.experienceMax,
             },
           })
           inserted++
@@ -89,7 +69,7 @@ export async function fetchAllJobs(): Promise<{ inserted: number; updated: numbe
     }))
   }
 
-  // Mark jobs not seen in 30 days as inactive
+  // Deactivate jobs older than 30 days
   await prisma.discoveredJob.updateMany({
     where: { updatedAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, isActive: true },
     data: { isActive: false },

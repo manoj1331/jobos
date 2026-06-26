@@ -51,7 +51,7 @@ services:
       AUTH_TRUST_HOST: "true"
       CRON_SECRET: jobos-cron-secret-2024
       UPLOAD_DIR: /app/uploads
-      # RAPIDAPI_KEY: your_rapidapi_key_here
+      RAPIDAPI_KEY: 2e50165a91mshac49b52738cf8fep170f50jsn738a6f5c4943
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -87,3 +87,4 @@ volumes:
 networks:
   default:
     name: jobos-network
+

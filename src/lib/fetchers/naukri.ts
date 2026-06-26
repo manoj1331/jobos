@@ -1,103 +1,97 @@
-// Naukri India — uses their internal frontend API (no auth required)
+// Naukri India — RSS feed (public, no auth needed)
 import { NormalizedJob, isExcludedCompany, isStrictlyRelevant } from "./constants"
 
-const ROLES = [
-  { keyword: "devops engineer", key: "devops-engineer-jobs-in-india" },
-  { keyword: "cloud engineer", key: "cloud-engineer-jobs-in-india" },
-  { keyword: "platform engineer", key: "platform-engineer-jobs-in-india" },
-  { keyword: "cloud support engineer", key: "cloud-support-engineer-jobs-in-india" },
+const RSS_FEEDS = [
+  { url: "https://www.naukri.com/rss/devops-engineer-jobs-in-india-3-to-6-years", role: "DevOps Engineer" },
+  { url: "https://www.naukri.com/rss/cloud-engineer-jobs-in-india-3-to-6-years", role: "Cloud Engineer" },
+  { url: "https://www.naukri.com/rss/platform-engineer-jobs-in-india-2-to-5-years", role: "Platform Engineer" },
+  { url: "https://www.naukri.com/rss/cloud-support-engineer-jobs-in-india", role: "Cloud Support Engineer" },
+  { url: "https://www.naukri.com/rss/devops-engineer-jobs-in-bangalore", role: "DevOps Engineer Bangalore" },
+  { url: "https://www.naukri.com/rss/cloud-engineer-jobs-in-bangalore", role: "Cloud Engineer Bangalore" },
+  { url: "https://www.naukri.com/rss/devops-engineer-jobs-in-hyderabad", role: "DevOps Engineer Hyderabad" },
+  { url: "https://www.naukri.com/rss/cloud-engineer-jobs-in-hyderabad", role: "Cloud Engineer Hyderabad" },
+  { url: "https://www.naukri.com/rss/devops-engineer-jobs-in-chennai", role: "DevOps Engineer Chennai" },
 ]
 
-function parseExp(minExp?: number, maxExp?: number): string | undefined {
-  if (minExp === undefined && maxExp === undefined) return undefined
-  if (minExp !== undefined && maxExp !== undefined) return `${minExp}–${maxExp} yrs`
-  if (minExp !== undefined) return `${minExp}+ yrs`
-  return `Up to ${maxExp} yrs`
+function parseNaukriRSS(xml: string): Array<{ title: string; company: string; location: string; link: string; desc: string; pubDate?: Date }> {
+  const jobs: any[] = []
+  const items = xml.split("<item>").slice(1)
+
+  for (const item of items) {
+    const get = (tag: string) => {
+      const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([^<]*)<\\/${tag}>`))
+      return (m ? (m[1] || m[2] || "") : "").trim()
+    }
+    const title = get("title")
+    const link = get("link") || get("guid")
+    const desc = get("description")
+    const pubDate = get("pubDate")
+
+    // Naukri RSS has company/location in the description
+    const companyMatch = desc.match(/Company[:\s]+([^<\n]+)/i) || desc.match(/<strong>([^<]+)<\/strong>/i)
+    const locationMatch = desc.match(/Location[:\s]+([^<\n]+)/i) || desc.match(/Location\s*:\s*([^\n<]+)/i)
+
+    if (!title || !link) continue
+
+    jobs.push({
+      title: title.replace(/\s*-\s*Naukri.*$/, "").trim(),
+      company: companyMatch?.[1]?.trim() ?? "Unknown",
+      location: locationMatch?.[1]?.trim() ?? "India",
+      link,
+      desc: desc.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 400),
+      pubDate: pubDate ? new Date(pubDate) : undefined,
+    })
+  }
+  return jobs
 }
 
 export async function fetchNaukri(): Promise<NormalizedJob[]> {
   const results: NormalizedJob[] = []
   const seen = new Set<string>()
 
-  for (const role of ROLES) {
-    for (let page = 1; page <= 3; page++) {
-      try {
-        const url = new URL("https://www.naukri.com/jobapi/v3/search")
-        url.searchParams.set("noOfResults", "20")
-        url.searchParams.set("urlType", "search_by_key_loc")
-        url.searchParams.set("searchType", "adv")
-        url.searchParams.set("keyword", role.keyword)
-        url.searchParams.set("location", "india")
-        url.searchParams.set("experience", "3")
-        url.searchParams.set("pageNo", String(page))
-        url.searchParams.set("k", role.keyword)
-        url.searchParams.set("l", "india")
-        url.searchParams.set("seoKey", role.key)
-        url.searchParams.set("src", "jobsearchDesk")
+  for (const { url } of RSS_FEEDS) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; RSS/1.0)",
+          "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(12000),
+      })
 
-        const res = await fetch(url.toString(), {
-          headers: {
-            "Appid": "109",
-            "systemid": "109",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json",
-            "Referer": "https://www.naukri.com/",
-          },
-          signal: AbortSignal.timeout(12000),
+      if (!res.ok) continue
+      const xml = await res.text()
+
+      // Not XML (got HTML redirect)
+      if (!xml.includes("<item>")) continue
+
+      const jobs = parseNaukriRSS(xml)
+      for (const job of jobs) {
+        if (seen.has(job.link)) continue
+        if (isExcludedCompany(job.company)) continue
+        if (!isStrictlyRelevant(job.title)) continue
+        if (/\b(fresher|0.?1\s*yr)\b/i.test(job.title)) continue
+
+        seen.add(job.link)
+        const loc = job.location
+        results.push({
+          externalId: `naukri_${Buffer.from(job.link).toString("base64").slice(0, 24)}`,
+          source: "naukri",
+          title: job.title,
+          company: job.company,
+          location: loc || "India",
+          isRemote: loc.toLowerCase().includes("remote"),
+          isHybrid: loc.toLowerCase().includes("hybrid"),
+          description: job.desc,
+          skills: [],
+          applyUrl: job.link,
+          jobType: "full-time",
+          postedAt: job.pubDate,
         })
-
-        if (!res.ok) break
-        const data = await res.json()
-        const jobs = data.jobDetails ?? []
-        if (!jobs.length) break
-
-        for (const job of jobs) {
-          const id = job.jobId?.toString()
-          if (!id || seen.has(id)) continue
-          if (isExcludedCompany(job.companyName ?? "")) continue
-          if (!isStrictlyRelevant(job.title ?? "")) continue
-
-          // Experience filter: only 2–6 years
-          const minExp = job.minimumExperience
-          const maxExp = job.maximumExperience
-          if (minExp !== undefined && minExp > 6) continue
-          if (maxExp !== undefined && maxExp < 2) continue
-
-          seen.add(id)
-
-          const loc = Array.isArray(job.placeholders)
-            ? job.placeholders.find((p: any) => p.type === "location")?.label ?? "India"
-            : "India"
-
-          const isRemote = loc.toLowerCase().includes("remote") || loc.toLowerCase().includes("work from home")
-          const isHybrid = loc.toLowerCase().includes("hybrid")
-
-          results.push({
-            externalId: `naukri_${id}`,
-            source: "naukri",
-            title: job.title,
-            company: job.companyName ?? "Unknown",
-            companyLogo: job.logoPathV3 ?? job.ambitionBoxData?.companyAvatar,
-            location: loc,
-            isRemote,
-            isHybrid,
-            description: job.jobDescription ?? job.staticUrl,
-            skills: Array.isArray(job.tagsAndSkills)
-              ? job.tagsAndSkills.split(",").map((s: string) => s.trim()).filter(Boolean)
-              : [],
-            applyUrl: `https://www.naukri.com${job.jdURL ?? `/job-listings-${id}`}`,
-            jobType: "full-time",
-            postedAt: job.footerPlaceholderLabel ? undefined : undefined,
-            companyType: undefined,
-            salaryMin: job.salary ? undefined : undefined,
-            experienceMin: minExp,
-            experienceMax: maxExp,
-          })
-        }
-      } catch (e) {
-        console.error(`[Naukri] ${role.keyword} p${page}:`, (e as Error).message)
-        break
       }
+    } catch (e) {
+      console.error(`[Naukri] ${url}:`, (e as Error).message)
     }
   }
 
