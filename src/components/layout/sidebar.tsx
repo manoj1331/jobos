@@ -8,12 +8,13 @@ import { cn } from "@/lib/utils"
 import {
   LayoutDashboard, Briefcase, Building2, Users, Mail,
   FileText, BarChart3, Calendar, Settings, ChevronLeft,
-  ChevronRight, KanbanSquare, Zap
+  ChevronRight, KanbanSquare, Zap, Telescope
 } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/discover", icon: Telescope, label: "Discover", badge: "LIVE" as string },
   { href: "/pipeline", icon: KanbanSquare, label: "Pipeline" },
   { href: "/jobs", icon: Briefcase, label: "Jobs" },
   { href: "/companies", icon: Building2, label: "Companies" },
@@ -74,9 +75,12 @@ export function Sidebar() {
                       <motion.span
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        className="truncate"
+                        className="flex items-center gap-2 flex-1 truncate"
                       >
                         {item.label}
+                        {"badge" in item && item.badge && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-600/30 text-emerald-400 font-bold tracking-wide">{item.badge}</span>
+                        )}
                       </motion.span>
                     )}
                   </Link>

@@ -29,6 +29,8 @@ model User {
   goals          Goal[]
   widgetLayouts  WidgetLayout[]
   emails         Email[]
+  savedJobs      UserSavedJob[]
+  jobApplications UserJobApplication[]
 
   @@map("users")
 }
@@ -404,4 +406,77 @@ model WidgetLayout {
 
   @@unique([userId, widgetId])
   @@map("widget_layouts")
+}
+
+model DiscoveredJob {
+  id                 String    @id @default(cuid())
+  externalId         String
+  source             String
+  title              String
+  company            String
+  companyLogo        String?
+  companyWebsite     String?
+  companyLinkedin    String?
+  companyCareersUrl  String?
+  companySize        String?
+  companyFunding     String?
+  companyDescription String?   @db.Text
+  companyType        String?
+  hrEmails           String[]
+  location           String?
+  isRemote           Boolean   @default(false)
+  isHybrid           Boolean   @default(false)
+  salaryMin          Int?
+  salaryMax          Int?
+  salaryCurrency     String?
+  description        String?   @db.Text
+  skills             String[]
+  applyUrl           String
+  jobType            String?
+  experienceMin      Int?
+  experienceMax      Int?
+  postedAt           DateTime?
+  isActive           Boolean   @default(true)
+  fetchedAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  saves        UserSavedJob[]
+  applications UserJobApplication[]
+
+  @@unique([externalId, source])
+  @@index([source])
+  @@index([isActive])
+  @@index([title])
+  @@index([company])
+  @@map("discovered_jobs")
+}
+
+model UserSavedJob {
+  id              String   @id @default(cuid())
+  userId          String
+  discoveredJobId String
+  savedAt         DateTime @default(now())
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  DiscoveredJob @relation(fields: [discoveredJobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, discoveredJobId])
+  @@map("user_saved_jobs")
+}
+
+model UserJobApplication {
+  id              String    @id @default(cuid())
+  userId          String
+  discoveredJobId String
+  status          String    @default("applied")
+  appliedAt       DateTime  @default(now())
+  interviewAt     DateTime?
+  notes           String?
+  updatedAt       DateTime  @updatedAt
+
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  DiscoveredJob @relation(fields: [discoveredJobId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, discoveredJobId])
+  @@map("user_job_applications")
 }

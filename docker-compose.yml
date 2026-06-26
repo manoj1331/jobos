@@ -46,6 +46,10 @@ services:
       DATABASE_URL: postgresql://jobos:jobos_secret@postgres:5432/jobos?schema=public
       NEXTAUTH_URL: http://98.88.127.60:8080
       NEXTAUTH_SECRET: jobos-super-secret-key-change-in-production-32chars
+      AUTH_TRUST_HOST: "true"
+      CRON_SECRET: jobos-cron-secret-2024
+      # Optional: Add your RapidAPI key for LinkedIn/Indeed/Glassdoor jobs
+      # RAPIDAPI_KEY: your_rapidapi_key_here
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -55,6 +59,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  cron:
+    image: node:20-alpine
+    container_name: jobos-cron
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./cron:/app
+    environment:
+      APP_URL: http://app:8080
+      CRON_SECRET: jobos-cron-secret-2024
+      REFRESH_INTERVAL_HOURS: "6"
+    command: node scheduler.js
+    depends_on:
+      app:
+        condition: service_healthy
 
 volumes:
   postgres_data:

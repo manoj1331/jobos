@@ -21,7 +21,7 @@ COPY prisma.config.ts ./prisma.config.ts
 COPY package.json ./package.json
 CMD ["node_modules/.bin/prisma", "migrate", "deploy"]
 
-# Production runner — minimal, only what Next.js standalone needs
+# Production runner
 FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=8080
