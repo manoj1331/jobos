@@ -21,14 +21,13 @@ services:
       start_period: 10s
 
   migrate:
-    image: node:20-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
     container_name: jobos-migrate
-    working_dir: /app
-    volumes:
-      - .:/app
     environment:
       DATABASE_URL: postgresql://jobos:jobos_secret@postgres:5432/jobos?schema=public
-    command: sh -c "npm install --prefer-offline 2>/dev/null; npx prisma migrate deploy"
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,6 +37,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runner
     container_name: jobos-app
     restart: unless-stopped
     ports:
@@ -54,7 +54,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 20s
 
 volumes:
   postgres_data:
