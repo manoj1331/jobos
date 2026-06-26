@@ -1,47 +1,49 @@
 import { prisma } from "@/lib/prisma"
+import { fetchNaukri } from "./naukri"
+import { fetchJSearch } from "./jsearch"
+import { fetchWellfound } from "./wellfound"
 import { fetchRemoteOK } from "./remoteok"
 import { fetchRemotive } from "./remotive"
-import { fetchArbeitnow } from "./arbeitnow"
-import { fetchJobicy } from "./jobicy"
-import { fetchWeWorkRemotely } from "./weworkremotely"
-import { fetchYCJobs } from "./ycjobs"
-import { fetchJSearch } from "./jsearch"
-import { fetchCutshort, fetchWellfound, fetchInstahyre } from "./india"
 import { NormalizedJob } from "./constants"
 
-export async function fetchAllJobs(): Promise<{ inserted: number; updated: number; total: number }> {
-  console.log("[JobFetcher] Starting fetch — South India + Remote, 4 strict roles only")
+export async function fetchAllJobs(): Promise<{ inserted: number; updated: number; total: number; sources: Record<string, number> }> {
+  console.log("[JobFetcher] Starting — India jobs, 4 roles, 3-4 yrs exp")
 
-  const fetchResults = await Promise.allSettled([
-    fetchRemoteOK(),      // Remote worldwide — accessible from South India
-    fetchRemotive(),      // Remote worldwide
-    fetchArbeitnow(),     // Remote worldwide (filtered to remote only)
-    fetchJobicy(),        // Remote worldwide
-    fetchWeWorkRemotely(), // Remote worldwide
-    fetchYCJobs(),        // YC startup jobs
-    fetchJSearch(),       // India-specific: Bangalore, Hyderabad, Chennai (needs RAPIDAPI_KEY)
-    fetchCutshort(),      // India startup jobs
-    fetchWellfound(),     // India startup jobs
-    fetchInstahyre(),     // Bangalore, Hyderabad, Chennai
+  const [naukri, jsearch, wellfound, remoteok, remotive] = await Promise.allSettled([
+    fetchNaukri(),      // Naukri India — primary India source
+    fetchJSearch(),     // LinkedIn + Indeed + Glassdoor + Google Jobs (needs RAPIDAPI_KEY)
+    fetchWellfound(),   // Startup jobs India
+    fetchRemoteOK(),    // Remote worldwide — India-accessible
+    fetchRemotive(),    // Remote worldwide — India-accessible
   ])
 
-  const names = ["RemoteOK","Remotive","Arbeitnow","Jobicy","WeWorkRemotely","YCJobs","JSearch","Cutshort","Wellfound","Instahyre"]
+  const all: NormalizedJob[] = []
+  const sourceCounts: Record<string, number> = {}
 
-  const allJobs: NormalizedJob[] = []
-  fetchResults.forEach((r, i) => {
+  const settled = [
+    { name: "naukri", r: naukri },
+    { name: "jsearch", r: jsearch },
+    { name: "wellfound", r: wellfound },
+    { name: "remoteok", r: remoteok },
+    { name: "remotive", r: remotive },
+  ]
+
+  for (const { name, r } of settled) {
     if (r.status === "fulfilled") {
-      console.log(`[JobFetcher] ${names[i]}: ${r.value.length} matching jobs`)
-      allJobs.push(...r.value)
+      sourceCounts[name] = r.value.length
+      all.push(...r.value)
     } else {
-      console.error(`[JobFetcher] ${names[i]} failed:`, r.reason)
+      console.error(`[JobFetcher] ${name} failed:`, r.reason)
+      sourceCounts[name] = 0
     }
-  })
+  }
 
   // Deduplicate
-  const unique = new Map<string, NormalizedJob>()
-  for (const job of allJobs) unique.set(`${job.source}:${job.externalId}`, job)
-  const jobs = [...unique.values()]
-  console.log(`[JobFetcher] Total unique: ${jobs.length}`)
+  const seen = new Map<string, NormalizedJob>()
+  for (const job of all) seen.set(`${job.source}:${job.externalId}`, job)
+  const jobs = [...seen.values()]
+
+  console.log(`[JobFetcher] Unique jobs after dedup: ${jobs.length}`)
 
   let inserted = 0, updated = 0
 
@@ -54,20 +56,31 @@ export async function fetchAllJobs(): Promise<{ inserted: number; updated: numbe
         if (existing) {
           await prisma.discoveredJob.update({
             where: { id: existing.id },
-            data: { title: job.title, isActive: true, updatedAt: new Date() },
+            data: { isActive: true, updatedAt: new Date() },
           })
           updated++
         } else {
           await prisma.discoveredJob.create({
             data: {
-              externalId: job.externalId, source: job.source,
-              title: job.title, company: job.company,
-              companyLogo: job.companyLogo, companyWebsite: job.companyWebsite,
-              location: job.location, isRemote: job.isRemote, isHybrid: job.isHybrid,
-              salaryMin: job.salaryMin, salaryMax: job.salaryMax, salaryCurrency: job.salaryCurrency,
-              description: job.description, skills: job.skills,
-              applyUrl: job.applyUrl, jobType: job.jobType,
-              postedAt: job.postedAt, companyType: job.companyType, isActive: true,
+              externalId: job.externalId,
+              source: job.source,
+              title: job.title,
+              company: job.company,
+              companyLogo: job.companyLogo,
+              location: job.location,
+              isRemote: job.isRemote,
+              isHybrid: job.isHybrid,
+              description: job.description,
+              skills: job.skills,
+              applyUrl: job.applyUrl,
+              jobType: job.jobType,
+              postedAt: job.postedAt,
+              isActive: true,
+              salaryMin: job.salaryMin,
+              salaryMax: job.salaryMax,
+              salaryCurrency: job.salaryCurrency,
+              experienceMin: job.experienceMin,
+              experienceMax: job.experienceMax,
             },
           })
           inserted++
@@ -76,12 +89,12 @@ export async function fetchAllJobs(): Promise<{ inserted: number; updated: numbe
     }))
   }
 
-  // Archive jobs older than 30 days
+  // Mark jobs not seen in 30 days as inactive
   await prisma.discoveredJob.updateMany({
     where: { updatedAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, isActive: true },
     data: { isActive: false },
   })
 
   console.log(`[JobFetcher] Done — inserted: ${inserted}, updated: ${updated}`)
-  return { inserted, updated, total: jobs.length }
+  return { inserted, updated, total: jobs.length, sources: sourceCounts }
 }
