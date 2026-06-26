@@ -42,13 +42,15 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    volumes:
+      - uploads_data:/app/uploads
     environment:
       DATABASE_URL: postgresql://jobos:jobos_secret@postgres:5432/jobos?schema=public
       NEXTAUTH_URL: http://98.88.127.60:8080
       NEXTAUTH_SECRET: jobos-super-secret-key-change-in-production-32chars
       AUTH_TRUST_HOST: "true"
       CRON_SECRET: jobos-cron-secret-2024
-      # Optional: Add your RapidAPI key for LinkedIn/Indeed/Glassdoor jobs
+      UPLOAD_DIR: /app/uploads
       # RAPIDAPI_KEY: your_rapidapi_key_here
     depends_on:
       migrate:
@@ -79,6 +81,8 @@ services:
 volumes:
   postgres_data:
     name: jobos_postgres_data
+  uploads_data:
+    name: jobos_uploads_data
 
 networks:
   default:

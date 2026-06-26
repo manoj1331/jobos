@@ -1,53 +1,29 @@
-import { NormalizedJob, isExcludedCompany, isRelevantRole } from "./constants"
+import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible } from "./constants"
 
-// YC Work at a Startup - fetch via their public API
 export async function fetchYCJobs(): Promise<NormalizedJob[]> {
   const results: NormalizedJob[] = []
-  const roles = ["devops", "cloud", "infrastructure", "platform", "sre", "kubernetes"]
+  const roles = ["devops engineer","cloud engineer","platform engineer","cloud support"]
 
   for (const role of roles) {
     try {
-      const res = await fetch(
-        `https://www.workatastartup.com/jobs?q=${encodeURIComponent(role)}&remote=true&job_type=fulltime`,
-        {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (compatible; JobOS/1.0)",
-            "Accept": "application/json",
-          },
-          signal: AbortSignal.timeout(10000),
-        }
-      )
-      // YC doesn't have a public JSON API, skip gracefully
-    } catch {}
-  }
-
-  // Use Algolia search which YC uses publicly
-  try {
-    const query = "devops OR kubernetes OR cloud engineer OR SRE OR platform engineer OR infrastructure"
-    const res = await fetch("https://45bwzj1sgc-dsn.algolia.net/1/indexes/WASJobs/query", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Algolia-Application-Id": "45BWZJ1SGC",
-        "X-Algolia-API-Key": "Yjk5ZmNlODc4ZmVlNjczMzRhY2Q2YmFiMzQyNjVkNWM5Y2MwNDA0NjFmOGU5ZWE0ZWFiZThlODEzNmRjMjcxMHJlc3RyaWN0SW5kaWNlcz1XQVNKB2JzJmZpbHRlcnM9",
-        "User-Agent": "JobOS/1.0",
-      },
-      body: JSON.stringify({
-        query,
-        hitsPerPage: 50,
-        filters: "remote:true OR location:remote",
-      }),
-      signal: AbortSignal.timeout(10000),
-    })
-
-    if (res.ok) {
+      const res = await fetch("https://45bwzj1sgc-dsn.algolia.net/1/indexes/WASJobs/query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Algolia-Application-Id": "45BWZJ1SGC",
+          "X-Algolia-API-Key": "Yjk5ZmNlODc4ZmVlNjczMzRhY2Q2YmFiMzQyNjVkNWM5Y2MwNDA0NjFmOGU5ZWE0ZWFiZThlODEzNmRjMjcxMHJlc3RyaWN0SW5kaWNlcz1XQVNKB2JzJmZpbHRlcnM9",
+        },
+        body: JSON.stringify({ query: role, hitsPerPage: 30 }),
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!res.ok) continue
       const data = await res.json()
-      const hits = data.hits ?? []
-      for (const hit of hits) {
+      for (const hit of (data.hits ?? [])) {
         if (!hit.title || !hit.company?.name) continue
         if (isExcludedCompany(hit.company.name)) continue
-        if (!isRelevantRole(hit.title)) continue
-
+        if (!isStrictlyRelevant(hit.title)) continue
+        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), hit.title)) continue
+        if (!isExperienceCompatible(hit.description, hit.title)) continue
         results.push({
           externalId: `yc_${hit.objectID}`,
           source: "ycombinator",
@@ -66,10 +42,9 @@ export async function fetchYCJobs(): Promise<NormalizedJob[]> {
           companyType: "startup",
         })
       }
+    } catch (e) {
+      console.error("[YCJobs] error:", (e as Error).message)
     }
-  } catch (e) {
-    console.error("YC Jobs fetch error:", e)
   }
-
   return results
 }

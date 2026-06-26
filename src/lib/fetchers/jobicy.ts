@@ -1,10 +1,12 @@
-import { NormalizedJob, isExcludedCompany, isRelevantRole } from "./constants"
+import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible } from "./constants"
+
+const TAGS = ["devops","cloud","platform","kubernetes","infrastructure","sre"]
 
 export async function fetchJobicy(): Promise<NormalizedJob[]> {
   const results: NormalizedJob[] = []
-  const tags = ["devops", "cloud", "kubernetes", "sre", "infrastructure"]
+  const seen = new Set<string>()
 
-  for (const tag of tags) {
+  for (const tag of TAGS) {
     try {
       const res = await fetch(`https://jobicy.com/api/v2/remote-jobs?count=50&tag=${tag}`, {
         headers: { "User-Agent": "JobOS/1.0" },
@@ -12,15 +14,19 @@ export async function fetchJobicy(): Promise<NormalizedJob[]> {
       })
       if (!res.ok) continue
       const data = await res.json()
-      const jobs = data.jobs ?? []
 
-      for (const job of jobs) {
+      for (const job of (data.jobs ?? [])) {
         if (!job.jobTitle || !job.companyName) continue
+        const id = job.id?.toString()
+        if (seen.has(id)) continue
         if (isExcludedCompany(job.companyName)) continue
-        if (!isRelevantRole(job.jobTitle, job.jobDescription)) continue
+        if (!isStrictlyRelevant(job.jobTitle)) continue
+        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), job.jobTitle)) continue
+        if (!isExperienceCompatible(job.jobDescription, job.jobTitle)) continue
 
+        seen.add(id)
         results.push({
-          externalId: `jcy_${job.id}`,
+          externalId: `jcy_${id}`,
           source: "jobicy",
           title: job.jobTitle,
           company: job.companyName,
@@ -31,13 +37,13 @@ export async function fetchJobicy(): Promise<NormalizedJob[]> {
           isHybrid: false,
           description: job.jobDescription,
           skills: Array.isArray(job.jobIndustry) ? job.jobIndustry : [],
-          applyUrl: job.jobGeo ? `${job.url}` : job.url,
+          applyUrl: job.url,
           jobType: job.jobType || "full-time",
           postedAt: job.pubDate ? new Date(job.pubDate) : undefined,
         })
       }
     } catch (e) {
-      console.error("Jobicy fetch error:", e)
+      console.error("[Jobicy] error:", (e as Error).message)
     }
   }
   return results

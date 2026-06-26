@@ -1,10 +1,12 @@
-import { NormalizedJob, isExcludedCompany, isRelevantRole } from "./constants"
+import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible } from "./constants"
+
+const TAGS = ["devops","cloud-engineer","platform-engineer","cloud","kubernetes","aws","gcp","azure","terraform","infrastructure"]
 
 export async function fetchArbeitnow(): Promise<NormalizedJob[]> {
   const results: NormalizedJob[] = []
-  const tags = ["devops", "kubernetes", "cloud", "sre", "platform-engineering", "infrastructure"]
+  const seen = new Set<string>()
 
-  for (const tag of tags) {
+  for (const tag of TAGS) {
     try {
       const res = await fetch(`https://www.arbeitnow.com/api/job-board-api?tags[]=${tag}`, {
         headers: { "User-Agent": "JobOS/1.0" },
@@ -12,13 +14,16 @@ export async function fetchArbeitnow(): Promise<NormalizedJob[]> {
       })
       if (!res.ok) continue
       const data = await res.json()
-      const jobs = data.data ?? []
 
-      for (const job of jobs) {
+      for (const job of (data.data ?? [])) {
         if (!job.title || !job.company_name) continue
+        if (seen.has(job.slug)) continue
         if (isExcludedCompany(job.company_name)) continue
-        if (!isRelevantRole(job.title, job.description)) continue
+        if (!isStrictlyRelevant(job.title)) continue
+        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), job.title)) continue
+        if (!isExperienceCompatible(job.description, job.title)) continue
 
+        seen.add(job.slug)
         const loc = job.location || "Remote"
         results.push({
           externalId: `arb_${job.slug}`,
@@ -36,7 +41,7 @@ export async function fetchArbeitnow(): Promise<NormalizedJob[]> {
         })
       }
     } catch (e) {
-      console.error("Arbeitnow fetch error:", e)
+      console.error("[Arbeitnow] error:", (e as Error).message)
     }
   }
   return results

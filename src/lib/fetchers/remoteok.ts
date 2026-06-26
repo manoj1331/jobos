@@ -1,11 +1,12 @@
-import { NormalizedJob, isExcludedCompany, isRelevantRole } from "./constants"
+import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible } from "./constants"
+
+const TAGS = ["devops","cloud","platform-engineer","cloud-engineer","infrastructure","kubernetes","sre","devsecops","terraform","aws","gcp","azure"]
 
 export async function fetchRemoteOK(): Promise<NormalizedJob[]> {
-  const tags = ["devops", "kubernetes", "cloud", "sre", "infrastructure", "platform"]
   const results: NormalizedJob[] = []
   const seen = new Set<string>()
 
-  for (const tag of tags) {
+  for (const tag of TAGS) {
     try {
       const res = await fetch(`https://remoteok.com/api?tag=${tag}`, {
         headers: { "User-Agent": "Mozilla/5.0 JobOS/1.0" },
@@ -17,13 +18,16 @@ export async function fetchRemoteOK(): Promise<NormalizedJob[]> {
 
       for (const job of jobs) {
         if (!job.position || !job.company) continue
-        if (seen.has(job.id?.toString())) continue
+        const id = job.id?.toString()
+        if (seen.has(id)) continue
         if (isExcludedCompany(job.company)) continue
-        if (!isRelevantRole(job.position, job.description)) continue
+        if (!isStrictlyRelevant(job.position)) continue
+        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), job.position)) continue
+        if (!isExperienceCompatible(job.description, job.position)) continue
 
-        seen.add(job.id?.toString())
+        seen.add(id)
         results.push({
-          externalId: `rok_${job.id}`,
+          externalId: `rok_${id}`,
           source: "remoteok",
           title: job.position,
           company: job.company,
@@ -36,10 +40,11 @@ export async function fetchRemoteOK(): Promise<NormalizedJob[]> {
           applyUrl: job.url || `https://remoteok.com/remote-jobs/${job.slug}`,
           jobType: "full-time",
           postedAt: job.date ? new Date(job.date) : undefined,
+          companyType: "startup",
         })
       }
     } catch (e) {
-      console.error(`RemoteOK fetch error for tag ${tag}:`, e)
+      console.error(`[RemoteOK] tag=${tag} error:`, (e as Error).message)
     }
   }
   return results

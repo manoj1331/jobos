@@ -1,13 +1,11 @@
-import { NormalizedJob, isExcludedCompany, isRelevantRole } from "./constants"
-
-const CATEGORIES = ["devops-sysadmin", "software-dev"]
-const KEYWORDS = ["devops","kubernetes","k8s","cloud","sre","infrastructure","platform","terraform","ansible"]
+import { NormalizedJob, isExcludedCompany, isStrictlyRelevant, isExperienceCompatible } from "./constants"
 
 export async function fetchRemotive(): Promise<NormalizedJob[]> {
   const results: NormalizedJob[] = []
   const seen = new Set<string>()
+  const categories = ["devops-sysadmin","software-dev"]
 
-  for (const cat of CATEGORIES) {
+  for (const cat of categories) {
     try {
       const res = await fetch(`https://remotive.com/api/remote-jobs?category=${cat}&limit=100`, {
         headers: { "User-Agent": "JobOS/1.0" },
@@ -15,19 +13,19 @@ export async function fetchRemotive(): Promise<NormalizedJob[]> {
       })
       if (!res.ok) continue
       const data = await res.json()
-      const jobs = data.jobs ?? []
 
-      for (const job of jobs) {
+      for (const job of (data.jobs ?? [])) {
         if (!job.title || !job.company_name) continue
-        if (seen.has(job.id?.toString())) continue
+        const id = job.id?.toString()
+        if (seen.has(id)) continue
         if (isExcludedCompany(job.company_name)) continue
-        if (!isRelevantRole(job.title, job.description)) continue
+        if (!isStrictlyRelevant(job.title)) continue
+        if (!isExperienceCompatible(job.(description|jobDescription|description)?.toString(), job.title)) continue
+        if (!isExperienceCompatible(job.description, job.title)) continue
 
-        const skills = Array.isArray(job.tags) ? job.tags.filter(Boolean) : []
-        seen.add(job.id?.toString())
-
+        seen.add(id)
         results.push({
-          externalId: `rem_${job.id}`,
+          externalId: `rem_${id}`,
           source: "remotive",
           title: job.title,
           company: job.company_name,
@@ -36,15 +34,14 @@ export async function fetchRemotive(): Promise<NormalizedJob[]> {
           isRemote: true,
           isHybrid: false,
           description: job.description,
-          skills,
+          skills: Array.isArray(job.tags) ? job.tags : [],
           applyUrl: job.url,
           jobType: job.job_type || "full-time",
           postedAt: job.publication_date ? new Date(job.publication_date) : undefined,
-          companyType: "startup",
         })
       }
     } catch (e) {
-      console.error("Remotive fetch error:", e)
+      console.error("[Remotive] error:", (e as Error).message)
     }
   }
   return results
