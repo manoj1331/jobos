@@ -1,7 +1,13 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  output: "standalone",
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "logo.clearbit.com" },
+      { protocol: "https", hostname: "cdn.brandfetch.io" },
+    ],
+  },
+}
 
-export default nextConfig;
+export default nextConfig
