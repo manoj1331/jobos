@@ -44,7 +44,7 @@ services:
       - "8080:8080"
     environment:
       DATABASE_URL: postgresql://jobos:jobos_secret@postgres:5432/jobos?schema=public
-      NEXTAUTH_URL: http://localhost:8080
+      NEXTAUTH_URL: http://98.88.127.60:8080
       NEXTAUTH_SECRET: jobos-super-secret-key-change-in-production-32chars
     depends_on:
       migrate:
