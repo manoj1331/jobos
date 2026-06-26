@@ -1,0 +1,407 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  companies      Company[]
+  jobs           Job[]
+  recruiters     Recruiter[]
+  emailTemplates EmailTemplate[]
+  documents      Document[]
+  notes          Note[]
+  reminders      Reminder[]
+  tags           Tag[]
+  goals          Goal[]
+  widgetLayouts  WidgetLayout[]
+  emails         Email[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Company {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  website         String?
+  careersUrl      String?
+  linkedin        String?
+  logo            String?
+  industry        String?
+  size            String?
+  location        String?
+  headquarters    String?
+  glassdoorRating Float?
+  levelsFyiNotes  String?  @db.Text
+  techStack       String[]
+  hiringStatus    String   @default("unknown")
+  remotePolicy    String   @default("unknown")
+  visaSponsorship Boolean  @default(false)
+  isFavorite      Boolean  @default(false)
+  priority        String   @default("medium")
+  notes           String?  @db.Text
+  status          String   @default("active")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs       Job[]
+  recruiters Recruiter[]
+  tags       CompanyTag[]
+
+  @@index([userId])
+  @@index([name])
+  @@map("companies")
+}
+
+model Job {
+  id              String    @id @default(cuid())
+  userId          String
+  companyId       String?
+  title           String
+  location        String?
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryCurrency  String    @default("USD")
+  employmentType  String    @default("full-time")
+  remote          String    @default("onsite")
+  jobUrl          String?
+  postingDate     DateTime?
+  deadline        DateTime?
+  priority        String    @default("medium")
+  status          String    @default("saved")
+  resumeUsed      String?
+  coverLetterUsed String?
+  referral        Boolean   @default(false)
+  referralName    String?
+  recruiterId     String?
+  hiringManager   String?
+  notes           String?   @db.Text
+  requiredSkills  String[]
+  matchScore      Int?
+  applicationDate DateTime?
+  lastFollowUp    DateTime?
+  offerAmount     Int?
+  offerDeadline   DateTime?
+  rejectionReason String?
+  isArchived      Boolean   @default(false)
+  isDuplicate     Boolean   @default(false)
+  boardColumn     String    @default("saved")
+  boardOrder      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company    Company?      @relation(fields: [companyId], references: [id])
+  recruiter  Recruiter?    @relation(fields: [recruiterId], references: [id])
+  interviews Interview[]
+  tags       JobTag[]
+  documents  JobDocument[]
+  emails     Email[]
+  activities Activity[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([companyId])
+  @@map("jobs")
+}
+
+model Recruiter {
+  id                 String    @id @default(cuid())
+  userId             String
+  companyId          String?
+  name               String
+  email              String?
+  phone              String?
+  linkedin           String?
+  location           String?
+  title              String?
+  lastContact        DateTime?
+  nextFollowUp       DateTime?
+  relationshipStatus String    @default("new")
+  notes              String?   @db.Text
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company?  @relation(fields: [companyId], references: [id])
+  jobs    Job[]
+  emails  Email[]
+
+  @@index([userId])
+  @@map("recruiters")
+}
+
+model Interview {
+  id        String   @id @default(cuid())
+  jobId     String
+  type      String
+  date      DateTime
+  duration  Int?
+  location  String?
+  notes     String?  @db.Text
+  outcome   String?
+  feedback  String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("interviews")
+}
+
+model EmailTemplate {
+  id         String   @id @default(cuid())
+  userId     String
+  name       String
+  category   String
+  subject    String
+  body       String   @db.Text
+  variables  String[]
+  isDefault  Boolean  @default(false)
+  usageCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails Email[]
+
+  @@index([userId])
+  @@map("email_templates")
+}
+
+model Email {
+  id          String    @id @default(cuid())
+  userId      String
+  recruiterId String?
+  templateId  String?
+  jobId       String?
+  to          String
+  subject     String
+  body        String    @db.Text
+  status      String    @default("draft")
+  sentAt      DateTime?
+  scheduledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recruiter Recruiter?     @relation(fields: [recruiterId], references: [id])
+  template  EmailTemplate? @relation(fields: [templateId], references: [id])
+  job       Job?           @relation(fields: [jobId], references: [id])
+
+  @@index([userId])
+  @@map("emails")
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  type      String
+  fileUrl   String
+  fileSize  Int?
+  mimeType  String?
+  version   Int      @default(1)
+  isDefault Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobUsage JobDocument[]
+
+  @@index([userId])
+  @@map("documents")
+}
+
+model JobDocument {
+  jobId      String
+  documentId String
+  type       String
+
+  job      Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, documentId])
+  @@map("job_documents")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String   @db.Text
+  jobId     String?
+  companyId String?
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notes")
+}
+
+model Reminder {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  dueAt       DateTime
+  type        String
+  jobId       String?
+  companyId   String?
+  isDone      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([dueAt])
+  @@map("reminders")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String   @default("#6366f1")
+  createdAt DateTime @default(now())
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs      JobTag[]
+  companies CompanyTag[]
+
+  @@unique([userId, name])
+  @@map("tags")
+}
+
+model JobTag {
+  jobId String
+  tagId String
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, tagId])
+  @@map("job_tags")
+}
+
+model CompanyTag {
+  companyId String
+  tagId     String
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, tagId])
+  @@map("company_tags")
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String
+  jobId     String?
+  type      String
+  title     String
+  details   String?
+  createdAt DateTime @default(now())
+
+  job Job? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activities")
+}
+
+model Goal {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  target    Int
+  current   Int       @default(0)
+  unit      String
+  period    String
+  deadline  DateTime?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("goals")
+}
+
+model WidgetLayout {
+  id       String  @id @default(cuid())
+  userId   String
+  widgetId String
+  x        Int
+  y        Int
+  w        Int
+  h        Int
+  isHidden Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, widgetId])
+  @@map("widget_layouts")
+}
